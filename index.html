@@ -31,6 +31,8 @@
         margin-bottom: 1.5rem;
       }
       .schema-item {
+        display: block;         /* Make the item a block element */
+        width: 100%;            /* Ensure it fills the container width */
         cursor: pointer;
         padding: 0.75rem 1rem;
         margin-bottom: 0.5rem;
@@ -38,6 +40,7 @@
         border: 1px solid #e5e7eb;
         border-radius: 8px;
         transition: background-color 0.2s ease, border-color 0.2s ease;
+        overflow-x: auto;       /* Allow horizontal scroll for long lines */
       }
       .schema-item:hover {
         background-color: #eff6ff; /* Light blue on hover */
