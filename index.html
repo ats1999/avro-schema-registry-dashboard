@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Avro Schema Registry Dashboard</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      body {
+        font-family: "Inter", sans-serif;
+        background-color: #f3f4f6; /* Light gray background */
+        color: #333;
+      }
+      .container {
+        max-width: 1200px;
+        margin: 2rem auto;
+        padding: 1.5rem;
+        background-color: #ffffff;
+        border-radius: 12px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+      }
+      h1,
+      h2 {
+        color: #1f2937; /* Darker gray for headings */
+        font-weight: 700;
+      }
+      .section-title {
+        border-bottom: 2px solid #e5e7eb;
+        padding-bottom: 0.75rem;
+        margin-bottom: 1.5rem;
+      }
+      .schema-item {
+        cursor: pointer;
+        padding: 0.75rem 1rem;
+        margin-bottom: 0.5rem;
+        background-color: #f9fafb;
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+        transition: background-color 0.2s ease, border-color 0.2s ease;
+      }
+      .schema-item:hover {
+        background-color: #eff6ff; /* Light blue on hover */
+        border-color: #93c5fd; /* Blue border on hover */
+      }
+      .schema-item.selected {
+        background-color: #dbeafe; /* Lighter blue for selected */
+        border-color: #3b82f6; /* Stronger blue border for selected */
+        font-weight: 600;
+      }
+      pre {
+        background-color: #1f2937; /* Dark background for code */
+        color: #e0e7eb; /* Light text color */
+        padding: 1rem;
+        border-radius: 8px;
+        overflow-x: auto;
+        white-space: pre-wrap; /* Wrap long lines */
+        word-break: break-all; /* Break words if necessary */
+      }
+      .diff-added {
+        background-color: #d1fae5; /* Light green */
+        color: #065f46; /* Dark green text */
+      }
+      .diff-removed {
+        background-color: #fee2e2; /* Light red */
+        color: #991b1b; /* Dark red text */
+      }
+      .diff-changed {
+        background-color: #fef9c3; /* Light yellow */
+        color: #a16207; /* Dark yellow text */
+      }
+      .diff-line-number {
+        color: #6b7280; /* Gray for line numbers */
+        margin-right: 1rem;
+        user-select: none; /* Prevent selection of line numbers */
+      }
+      .diff-container {
+        display: flex;
+        gap: 1rem;
+        background-color: #1f2937;
+        padding: 1rem;
+        border-radius: 8px;
+        overflow-x: auto;
+      }
+      .diff-pane {
+        flex: 1;
+        min-width: 45%; /* Ensure panes don't shrink too much */
+        white-space: pre; /* Preserve whitespace and line breaks */
+        font-family: monospace;
+        font-size: 0.875rem;
+        line-height: 1.5;
+        color: #e0e7eb;
+      }
+      .diff-pane span {
+        display: block; /* Each line takes full width */
+      }
+      select {
+        padding: 0.5rem 1rem;
+        border-radius: 8px;
+        border: 1px solid #d1d5db;
+        background-color: #f9fafb;
+        appearance: none; /* Remove default arrow */
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='currentColor'%3E%3Cpath fill-rule='evenodd' d='M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z' clip-rule='evenodd'%3E%3C/path%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-position: right 0.75rem center;
+        background-size: 1.25rem;
+        cursor: pointer;
+      }
+      button {
+        padding: 0.75rem 1.5rem;
+        border-radius: 8px;
+        font-weight: 600;
+        transition: background-color 0.2s ease, transform 0.1s ease;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      }
+      button.primary {
+        background-color: #3b82f6; /* Blue */
+        color: #ffffff;
+      }
+      button.primary:hover {
+        background-color: #2563eb; /* Darker blue */
+        transform: translateY(-1px);
+      }
+      button.primary:active {
+        transform: translateY(0);
+        box-shadow: none;
+      }
+      .message-box {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background-color: #fff;
+        border: 1px solid #ccc;
+        padding: 15px;
+        border-radius: 8px;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        z-index: 1000;
+        display: none; /* Hidden by default */
+      }
+      .message-box.show {
+        display: block;
+      }
+    </style>
+  </head>
+  <body class="p-4">
+    <div class="container">
+      <h1 class="text-3xl mb-6 text-center">
+        Confluent Avro Schema Registry Dashboard
+      </h1>
+
+      <!-- Message Box -->
+      <div id="messageBox" class="message-box"></div>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <!-- View All Schemas -->
+        <div class="col-span-1 bg-gray-50 p-6 rounded-xl shadow-inner">
+          <h2 class="text-2xl section-title mb-4">All Schemas</h2>
+          <div
+            id="schemasList"
+            class="h-96 overflow-y-auto border border-gray-200 rounded-lg p-2 bg-white"
+          >
+            <p class="text-gray-500 text-center py-4">Loading schemas...</p>
+          </div>
+        </div>
+
+        <!-- Schema Details and Version Selection -->
+        <div class="col-span-2 bg-gray-50 p-6 rounded-xl shadow-inner">
+          <h2 class="text-2xl section-title mb-4">Schema Details</h2>
+          <div id="schemaDetails" class="hidden">
+            <p class="text-lg font-semibold mb-4">
+              Selected Schema:
+              <span id="selectedSchemaName" class="text-blue-600"></span>
+            </p>
+
+            <div class="mb-4 flex items-center gap-4">
+              <label for="versionSelect" class="text-gray-700 font-medium"
+                >Select Version:</label
+              >
+              <select id="versionSelect" class="flex-grow"></select>
+              <button id="viewSchemaButton" class="primary">View Schema</button>
+            </div>
+
+            <h3 class="text-xl font-semibold mb-2">Schema Content:</h3>
+            <pre id="schemaContent" class="h-96 text-sm"></pre>
+          </div>
+          <div id="noSchemaSelected" class="text-center py-10 text-gray-500">
+            <p>Select a schema from the left panel to view its details.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Schema Comparison -->
+      <div class="mt-8 bg-gray-50 p-6 rounded-xl shadow-inner">
+        <h2 class="text-2xl section-title mb-4">Schema Comparison</h2>
+        <div class="flex flex-col md:flex-row items-center gap-4 mb-6">
+          <label
+            for="compareVersion1"
+            class="text-gray-700 font-medium whitespace-nowrap"
+            >Schema 1 Version:</label
+          >
+          <select id="compareVersion1" class="flex-grow"></select>
+
+          <label
+            for="compareVersion2"
+            class="text-gray-700 font-medium whitespace-nowrap"
+            >Schema 2 Version:</label
+          >
+          <select id="compareVersion2" class="flex-grow"></select>
+
+          <button id="compareSchemasButton" class="primary w-full md:w-auto">
+            Compare Schemas
+          </button>
+        </div>
+
+        <h3 class="text-xl font-semibold mb-2">Comparison Result:</h3>
+        <div
+          id="comparisonResult"
+          class="min-h-[200px] bg-gray-800 rounded-lg p-2 text-sm"
+        >
+          <p class="text-gray-400 text-center py-4">
+            Select two versions and click 'Compare Schemas' to see the
+            difference.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // Constants
+      const SCHEMA_REGISTRY_URL =
+        localStorage.SCHEMA_REGISTRY_URL || "http://localhost:9000";
+
+      // DOM Elements
+      const schemasList = document.getElementById("schemasList");
+      const schemaDetails = document.getElementById("schemaDetails");
+      const noSchemaSelected = document.getElementById("noSchemaSelected");
+      const selectedSchemaName = document.getElementById("selectedSchemaName");
+      const versionSelect = document.getElementById("versionSelect");
+      const viewSchemaButton = document.getElementById("viewSchemaButton");
+      const schemaContentPre = document.getElementById("schemaContent");
+      const compareVersion1Select = document.getElementById("compareVersion1");
+      const compareVersion2Select = document.getElementById("compareVersion2");
+      const compareSchemasButton = document.getElementById(
+        "compareSchemasButton"
+      );
+      const comparisonResultDiv = document.getElementById("comparisonResult");
+      const messageBox = document.getElementById("messageBox");
+
+      let currentSubject = null; // Stores the currently selected schema subject
+
+      // Utility function to show messages
+      function showMessage(message, type = "info") {
+        messageBox.textContent = message;
+        messageBox.className = `message-box show bg-${
+          type === "error" ? "red" : "green"
+        }-100 text-${type === "error" ? "red" : "green"}-700 border-${
+          type === "error" ? "red" : "green"
+        }-400`;
+        setTimeout(() => {
+          messageBox.className = "message-box";
+        }, 3000); // Hide after 3 seconds
+      }
+
+      /**
+       * Fetches all registered schemas (subjects) from the Schema Registry.
+       * Populates the 'All Schemas' list.
+       */
+      async function fetchAllSchemas() {
+        schemasList.innerHTML =
+          '<p class="text-gray-500 text-center py-4">Loading schemas...</p>';
+        try {
+          const response = await fetch(`${SCHEMA_REGISTRY_URL}/subjects`);
+          if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+          }
+          const subjects = await response.json();
+
+          schemasList.innerHTML = ""; // Clear loading message
+
+          if (subjects.length === 0) {
+            schemasList.innerHTML =
+              '<p class="text-gray-500 text-center py-4">No schemas found.</p>';
+            return;
+          }
+
+          subjects.forEach((subject) => {
+            const div = document.createElement("div");
+            div.className = "schema-item";
+            div.textContent = subject;
+            div.addEventListener("click", () => selectSchema(subject, div));
+            schemasList.appendChild(div);
+          });
+          showMessage("Schemas loaded successfully!", "success");
+        } catch (error) {
+          console.error("Error fetching schemas:", error);
+          schemasList.innerHTML =
+            '<p class="text-red-500 text-center py-4">Failed to load schemas. Is Schema Registry running on localhost:9000?</p>';
+          showMessage(
+            `Error: ${error.message}. Check console for details.`,
+            "error"
+          );
+        }
+      }
+
+      /**
+       * Handles the selection of a schema from the list.
+       * @param {string} subject - The name of the selected schema subject.
+       * @param {HTMLElement} selectedDiv - The div element that was clicked.
+       */
+      function selectSchema(subject, selectedDiv) {
+        // Remove 'selected' class from previously selected item
+        document.querySelectorAll(".schema-item").forEach((item) => {
+          item.classList.remove("selected");
+        });
+        // Add 'selected' class to the clicked item
+        selectedDiv.classList.add("selected");
+
+        currentSubject = subject;
+        selectedSchemaName.textContent = subject;
+        schemaDetails.classList.remove("hidden");
+        noSchemaSelected.classList.add("hidden");
+        versionSelect.innerHTML = ""; // Clear previous versions
+        compareVersion1Select.innerHTML = "";
+        compareVersion2Select.innerHTML = "";
+        schemaContentPre.textContent = ""; // Clear previous schema content
+        comparisonResultDiv.innerHTML =
+          "<p class=\"text-gray-400 text-center py-4\">Select two versions and click 'Compare Schemas' to see the difference.</p>";
+
+        fetchSchemaVersions(subject);
+      }
+
+      /**
+       * Fetches all versions for a given schema subject.
+       * Populates the version dropdowns.
+       * @param {string} subject - The schema subject name.
+       */
+      async function fetchSchemaVersions(subject) {
+        versionSelect.innerHTML = "<option>Loading versions...</option>";
+        compareVersion1Select.innerHTML =
+          "<option>Loading versions...</option>";
+        compareVersion2Select.innerHTML =
+          "<option>Loading versions...</option>";
+
+        try {
+          const response = await fetch(
+            `${SCHEMA_REGISTRY_URL}/subjects/${subject}/versions`
+          );
+          if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+          }
+          const versions = await response.json();
+
+          if (versions.length === 0) {
+            versionSelect.innerHTML = "<option>No versions found</option>";
+            compareVersion1Select.innerHTML =
+              "<option>No versions found</option>";
+            compareVersion2Select.innerHTML =
+              "<option>No versions found</option>";
+            return;
+          }
+
+          // Sort versions numerically in descending order
+          versions.sort((a, b) => b - a);
+
+          // Populate main version select
+          versionSelect.innerHTML = versions
+            .map((v) => `<option value="${v}">Version ${v}</option>`)
+            .join("");
+          // Populate comparison version selects
+          compareVersion1Select.innerHTML = versions
+            .map((v) => `<option value="${v}">Version ${v}</option>`)
+            .join("");
+          compareVersion2Select.innerHTML = versions
+            .map((v) => `<option value="${v}">Version ${v}</option>`)
+            .join("");
+
+          // Select the latest version by default in the main viewer
+          if (versions.length > 0) {
+            versionSelect.value = versions[0];
+            fetchSchemaContent(currentSubject, versions[0]);
+          }
+          showMessage(`Versions for ${subject} loaded.`, "success");
+        } catch (error) {
+          console.error(`Error fetching versions for ${subject}:`, error);
+          versionSelect.innerHTML = "<option>Error loading versions</option>";
+          compareVersion1Select.innerHTML =
+            "<option>Error loading versions</option>";
+          compareVersion2Select.innerHTML =
+            "<option>Error loading versions</option>";
+          showMessage(`Error fetching versions: ${error.message}`, "error");
+        }
+      }
+
+      /**
+       * Fetches the content of a specific schema version.
+       * @param {string} subject - The schema subject name.
+       * @param {string} version - The schema version.
+       */
+      async function fetchSchemaContent(subject, version) {
+        schemaContentPre.textContent = "Loading schema content...";
+        try {
+          const response = await fetch(
+            `${SCHEMA_REGISTRY_URL}/subjects/${subject}/versions/${version}`
+          );
+          if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+          }
+          const schemaData = await response.json();
+          // Parse the schema string to a JSON object for pretty printing
+          const schemaObject = JSON.parse(schemaData.schema);
+          schemaContentPre.textContent = JSON.stringify(schemaObject, null, 2);
+          showMessage(
+            `Schema content for Version ${version} loaded.`,
+            "success"
+          );
+        } catch (error) {
+          console.error(
+            `Error fetching schema content for ${subject} version ${version}:`,
+            error
+          );
+          schemaContentPre.textContent = `Error loading schema content: ${error.message}`;
+          showMessage(
+            `Error loading schema content: ${error.message}`,
+            "error"
+          );
+        }
+      }
+
+      /**
+       * Compares two schema strings line by line and displays the differences.
+       * This is a basic line-by-line diff.
+       */
+      async function compareSchemas() {
+        const version1 = compareVersion1Select.value;
+        const version2 = compareVersion2Select.value;
+
+        if (
+          !currentSubject ||
+          !version1 ||
+          !version2 ||
+          version1 === "Loading versions..." ||
+          version2 === "Loading versions..."
+        ) {
+          comparisonResultDiv.innerHTML =
+            '<p class="text-gray-400 text-center py-4">Please select two valid schema versions for comparison.</p>';
+          showMessage(
+            "Please select two valid schema versions to compare.",
+            "info"
+          );
+          return;
+        }
+
+        if (version1 === version2) {
+          comparisonResultDiv.innerHTML =
+            '<p class="text-gray-400 text-center py-4">Selected versions are identical. No differences to show.</p>';
+          showMessage(
+            "Cannot compare identical versions. Please select different versions.",
+            "info"
+          );
+          return;
+        }
+
+        comparisonResultDiv.innerHTML =
+          '<p class="text-gray-400 text-center py-4">Loading schemas for comparison...</p>';
+
+        try {
+          const [response1, response2] = await Promise.all([
+            fetch(
+              `${SCHEMA_REGISTRY_URL}/subjects/${currentSubject}/versions/${version1}`
+            ),
+            fetch(
+              `${SCHEMA_REGISTRY_URL}/subjects/${currentSubject}/versions/${version2}`
+            ),
+          ]);
+
+          if (!response1.ok)
+            throw new Error(
+              `HTTP error! status: ${response1.status} for version ${version1}`
+            );
+          if (!response2.ok)
+            throw new Error(
+              `HTTP error! status: ${response2.status} for version ${version2}`
+            );
+
+          const schemaData1 = await response1.json();
+          const schemaData2 = await response2.json();
+
+          const schema1Lines = JSON.stringify(
+            JSON.parse(schemaData1.schema),
+            null,
+            2
+          ).split("\n");
+          const schema2Lines = JSON.stringify(
+            JSON.parse(schemaData2.schema),
+            null,
+            2
+          ).split("\n");
+
+          const maxLength = Math.max(schema1Lines.length, schema2Lines.length);
+
+          let diffHtml1 = "";
+          let diffHtml2 = "";
+
+          for (let i = 0; i < maxLength; i++) {
+            const line1 = schema1Lines[i] || "";
+            const line2 = schema2Lines[i] || "";
+
+            let class1 = "";
+            let class2 = "";
+
+            if (line1 === line2) {
+              // Identical lines
+              class1 = "";
+              class2 = "";
+            } else {
+              // Lines are different or one is missing
+              if (line1 && !line2) {
+                // Line in schema1 but not in schema2 (removed)
+                class1 = "diff-removed";
+                class2 = ""; // No corresponding line in schema2
+              } else if (!line1 && line2) {
+                // Line in schema2 but not in schema1 (added)
+                class1 = ""; // No corresponding line in schema1
+                class2 = "diff-added";
+              } else {
+                // Lines exist in both but are different (changed)
+                class1 = "diff-changed";
+                class2 = "diff-changed";
+              }
+            }
+            diffHtml1 += `<span class="${class1}"><span class="diff-line-number">${
+              i + 1
+            }.</span>${escapeHtml(line1)}</span>`;
+            diffHtml2 += `<span class="${class2}"><span class="diff-line-number">${
+              i + 1
+            }.</span>${escapeHtml(line2)}</span>`;
+          }
+
+          comparisonResultDiv.innerHTML = `
+                    <div class="diff-container">
+                        <div class="diff-pane">
+                            <h4 class="text-lg font-semibold text-white mb-2">Version ${version1}</h4>
+                            ${diffHtml1}
+                        </div>
+                        <div class="diff-pane">
+                            <h4 class="text-lg font-semibold text-white mb-2">Version ${version2}</h4>
+                            ${diffHtml2}
+                        </div>
+                    </div>
+                `;
+          showMessage("Schema comparison complete!", "success");
+        } catch (error) {
+          console.error("Error comparing schemas:", error);
+          comparisonResultDiv.innerHTML = `<p class="text-red-500 text-center py-4">Error comparing schemas: ${error.message}</p>`;
+          showMessage(`Error comparing schemas: ${error.message}`, "error");
+        }
+      }
+
+      // Helper function to escape HTML for displaying code
+      function escapeHtml(text) {
+        const map = {
+          "&": "&amp;",
+          "<": "&lt;",
+          ">": "&gt;",
+          '"': "&quot;",
+          "'": "&#039;",
+        };
+        return text.replace(/[&<>"']/g, function (m) {
+          return map[m];
+        });
+      }
+
+      // Event Listeners
+      viewSchemaButton.addEventListener("click", () => {
+        if (currentSubject && versionSelect.value) {
+          fetchSchemaContent(currentSubject, versionSelect.value);
+        } else {
+          showMessage("Please select a schema and a version first.", "info");
+        }
+      });
+
+      compareSchemasButton.addEventListener("click", compareSchemas);
+
+      // Initial load
+      document.addEventListener("DOMContentLoaded", fetchAllSchemas);
+    </script>
+  </body>
+</html>
